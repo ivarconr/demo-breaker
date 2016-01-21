@@ -1,0 +1,19 @@
+{
+  "name": "demo-breaker",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Ivar Conradi Østhus <ivarconr@gmail.com>",
+  "license": "ISC",
+  "dependencies": {
+    "circuit-breaker": "0.0.4",
+    "circuit-breaker-as-promised": "^1.1.0",
+    "circuit-breaker-js": "0.0.1",
+    "install": "^0.4.1",
+    "koa": "^1.1.2",
+    "npm": "^3.5.3"
+  }
+}
