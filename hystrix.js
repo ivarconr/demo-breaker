@@ -3,7 +3,7 @@ var CommandFactory = require('hystrixjs').commandFactory;
 var q = require("q");
 var service = require('./external-service');
 
-var run = function(arg) {
+var fetchPromised = function(arg) {
   var deferred = q.defer();
   service.fetchSlowData(arg, function(err, data) {
     if(err) {
@@ -19,7 +19,7 @@ var run = function(arg) {
 var serviceCommand = CommandFactory.getOrCreate('test slow service')
     .circuitBreakerErrorThresholdPercentage(20)
     .timeout(600)
-    .run(run)
+    .run(fetchPromised)
     .circuitBreakerRequestVolumeThreshold(10)
     .circuitBreakerSleepWindowInMilliseconds(10)
     .statisticalWindowLength(10000)

@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Circuit breakers in Node.js</title>
+    <meta charset="utf-8">
+    <style>
+      @import url(https://fonts.googleapis.com/css?family=Yanone+Kaffeesatz);
+      @import url(https://fonts.googleapis.com/css?family=Droid+Serif:400,700,400italic);
+      @import url(https://fonts.googleapis.com/css?family=Ubuntu+Mono:400,700,400italic);
+
+      body { font-family: 'Droid Serif'; }
+      h1, h2, h3 {
+        font-family: 'Yanone Kaffeesatz';
+        font-weight: normal;
+      }
+      .remark-code, .remark-inline-code { font-family: 'Ubuntu Mono'; }
+    </style>
+  </head>
+  <body>
+    <textarea id="source">
+
+class: center, middle
+
+# Circuit breakers in Node.js
+
+---
+
+# Agenda
+
+1. Circuit Breakers, but why?
+2. circuit-breaker-js
+  - other varioations
+3. circuit-breaker
+4. hystrixjs
+5. levee
+
+---
+
+# Circuit Breakers, but why?
+
+A lot can go wrong when you deal with distributed computing:
+- Connection refused: < 2ms
+- Slow answer: 5s
+- Veeery slow answer: timeout
+- _Response_ can cause fault in client lib
+
+---
+
+# Circuit Breakers, but why?
+
+Circuit breaking should give us:
+
+- control over latency and failure from dependencies
+- stop cascading failures in complex distrbuted systems
+- fail fast and rapidly recover (instead for queuing)
+- fallback and gracefully degrade when possible
+- avoid having a single dep from using up all _request handles_
+
+Upside in node: single threaded and uses non-blocking IO by default!
+
+---
+
+# circuit-breaker-js
+
+- developed by yammer
+- mainly built for the browser, but node is also supported
+- setTimeout / setInterval => hangs/lagging in node
+- can not vary on "params" to a command
+
+---
+
+# circuit-breaker-js :: Code example
+
+```javascript
+var breaker = new CircuitBreaker({
+  timeoutDuration: 500,
+  numBuckets: 10,
+  volumeThreshold: 10,
+  errorThreshold: 1
+});
+
+
+var command = function(success, failure) {
+  service.fetchSlowData(1000, function(error, data) {
+    if(error) {
+      failure();
+    } else {
+      //do something with the data!
+      console.log(`#${count}: ${data}`);
+      success();
+    }
+  });
+};
+
+breaker.run(command, fallback);
+```
+
+---
+
+# circuit-breaker-js :: Pros/Cons
+
+### Pros
+- Small API
+ - use same terminology as hystrix
+ - you have full controll on what is considered a failure.
+- Easy to use
+- Support basic circuit stuff
+- Fallback built in
+- Reports / Statistics
+ - Can easily be extended to send metrics to statsd/promethious
+- Browser support
+- A lot of people uses it
+ - (multiple downloads last week)
+
+---
+
+ # circuit-breaker-js :: Pros/Cons
+
+
+### Cons
+- No activity after July 2014
+ - Do they accept PRs? (active PR still waiting)
+- uses setTimeout / setInterval
+- Poor documentation (but small API, read the code!)
+- (No dashboard)
+
+---
+
+# circuit-breaker-js :: alternatives
+- node-circuit-breaker-as-promised
+- https://github.com/Schibsted-Tech-Polska/circuit-breaker-js
+
+---
+
+# circuit-breaker
+A port of Akka's Circuit Breaker to Node.js.
+
+```javascript
+var circuit_breaker  = require('circuit-breaker');
+var service = require('./external-service');
+
+var gated_function = circuit_breaker.new_circuit_breaker(service.fetchSlowData,
+                                                           5 /* max_failures */,
+                                                           300 /* call_timeout_ms */,
+                                                           10 /* reset_timeout_ms */);
+gated_function(1000, function (error, result) {
+    if(error) {
+      console.log(`Error: ${error}`);
+      return;
+    }
+    console.log(`Success: ${result}`);
+  });
+
+```
+(can also wrap all functions in an object)
+
+---
+
+# circuit-breaker pros/cons
+
+### Pros
+- Very simple API
+- Easy to get started
+
+### Cons
+- Limited API
+- uses setTimeout
+- no reporting/metrics
+
+---
+
+# hystrixjs
+
+A complete port of hystrix to node.js
+
+```javascript
+var CommandFactory = require('hystrixjs').commandFactory;
+
+var serviceCommand = CommandFactory.getOrCreate('test slow service')
+    .circuitBreakerErrorThresholdPercentage(20)
+    .timeout(600)
+    .run(fetchPromised)
+    .circuitBreakerRequestVolumeThreshold(10)
+    .circuitBreakerSleepWindowInMilliseconds(10)
+    .statisticalWindowLength(10000)
+    .statisticalWindowNumberOfBuckets(10)
+    .build();
+
+
+function handleSuccess(data) {
+  console.log(`SUCCESS: ${data}`);
+}
+
+function handleError(err) {
+  console.log(`ERROR: ${err}`);
+}
+
+serviceCommand.execute(800).then(handleSuccess, handleError);
+```
+
+---
+
+# hystrixjs pros/cons
+
+### pros
+
+- Looks like a complete port for hystrix
+- A lot of configuration options
+- Supports Hystrix Dashboard
+
+### cons
+- Can be complicated to configure for the simple/common cases
+ - Hard to get started!
+- No-one^TM uses it
+ - (zero downloads last week)
+- Poor code quality
+ - (looks like a java-dev hacking his first node project)
+- Requires commands to wrap promises
+
+---
+
+# levee
+
+Developed by krakenjs (paypal)
+
+```javascript
+var Levee = require('levee');
+var service = require('./external-service');
+
+var options, circuit;
+
+options = {
+    maxFailures: 5,
+    timeout: 60000,
+    resetTimeout: 30000
+};
+
+circuit = Levee.createBreaker(service.fetchSlowData, options);
+circuit.run(1000, function (err, req, payload) {
+    // If the service fails or timeouts occur 5 consecutive times,
+    // the breaker opens, fast failing subsequent requests.
+    console.log(err || payload);
+});
+```
+
+---
+
+# levee pros/cons
+
+### Pros
+
+- Simple API
+- Very easy to use!
+- Good documentation!
+- Statistics
+- Looks like it is actively maintained.
+- Supports stuff like:
+ - maxFailures
+ - timeout
+ - resetTimeout
+ - isFailure overrides
+
+### Cons
+- No window concept
+- No dashboard
+- fewer downloads on npmjs.org than "circuit-breaker-js"
+
+---
+
+
+# References
+- https://github.com/ivarconr/demo-breaker
+- http://www.slideshare.net/spjelkavik/hystrix-what-did-we-learn
+
+
+    </textarea>
+    <script src="https://gnab.github.io/remark/downloads/remark-latest.min.js">
+    </script>
+    <script>
+      var slideshow = remark.create();
+    </script>
+  </body>
+</html>
