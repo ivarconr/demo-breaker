@@ -12,9 +12,11 @@
     "circuit-breaker": "0.0.4",
     "circuit-breaker-as-promised": "^1.1.0",
     "circuit-breaker-js": "0.0.1",
+    "hystrixjs": "0.0.3",
     "install": "^0.4.1",
     "koa": "^1.1.2",
     "levee": "^1.2.0",
-    "npm": "^3.5.3"
+    "npm": "^3.5.3",
+    "q": "^1.4.1"
   }
 }
